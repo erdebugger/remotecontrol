@@ -45,6 +45,20 @@ for idx, host in enumerate(hosts):
 creds = Credentials(username=username, password=password) if use_creds and username and password else None
 controller = ClassroomController(credentials=creds)
 
+with st.sidebar:
+    st.divider()
+    st.subheader("Conectividad WinRM")
+    trusted_target = st.text_input("Añadir TrustedHost (IP o DNS)", value="")
+    if st.button("Agregar a TrustedHosts"):
+        if trusted_target.strip():
+            trusted_result = controller.add_trusted_host(trusted_target.strip())
+            if trusted_result.returncode == 0:
+                st.success(f"TrustedHosts actualizado con: {trusted_target.strip()}")
+            else:
+                st.error(f"No se pudo actualizar TrustedHosts: {controller.format_error(trusted_result.stderr, trusted_result.stdout)}")
+        else:
+            st.warning("Indica una IP o nombre DNS para TrustedHosts")
+
 st.divider()
 left, mid, right = st.columns(3)
 
@@ -55,7 +69,7 @@ with left:
             if result.returncode == 0:
                 st.success(f"Apagado enviado a {ip}")
             else:
-                st.error(f"Error en {ip}: {result.stderr}")
+                st.error(f"Error en {ip}: {controller.format_error(result.stderr, result.stdout)}")
 
 with mid:
     if st.button("Bloquear Internet (total)"):
@@ -65,7 +79,7 @@ with mid:
             if result.returncode == 0:
                 st.success(f"Internet bloqueado en {ip}")
             else:
-                st.error(f"Error en {ip}: {result.stderr}")
+                st.error(f"Error en {ip}: {controller.format_error(result.stderr, result.stdout)}")
 
 with right:
     if st.button("Abrir Internet (total)"):
@@ -75,7 +89,7 @@ with right:
             if result.returncode == 0:
                 st.success(f"Internet habilitado en {ip}")
             else:
-                st.error(f"Error en {ip}: {result.stderr}")
+                st.error(f"Error en {ip}: {controller.format_error(result.stderr, result.stdout)}")
 
 st.divider()
 st.subheader("Internet parcial (lista blanca)")
@@ -95,4 +109,4 @@ if st.button("Aplicar Internet parcial"):
         if result.returncode == 0:
             st.success(f"Política parcial aplicada en {ip}")
         else:
-            st.error(f"Error en {ip}: {result.stderr}")
+            st.error(f"Error en {ip}: {controller.format_error(result.stderr, result.stdout)}")

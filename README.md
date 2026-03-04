@@ -22,7 +22,7 @@ Este proyecto implementa un **MVP funcional** con:
 ## Arquitectura propuesta
 
 - `remotecontrol/discovery.py`: detección de hosts por ICMP.
-- `remotecontrol/ops.py`: creación y ejecución de comandos remotos.
+- `remotecontrol/ops.py`: creación y ejecución de comandos remotos + utilidades TrustedHosts/errores.
 - `remotecontrol/policy.py`: generación de política de Internet (total/parcial).
 - `remotecontrol/wol.py`: envío de paquetes Wake-on-LAN.
 - `ui_panel.py`: panel Streamlit para el profesor.
@@ -48,6 +48,39 @@ pip install -r requirements.txt
 streamlit run ui_panel.py
 ```
 
+## Preparación de clientes (alumnos)
+
+En cada cliente Windows 11 Pro (o por GPO):
+
+1. Habilitar remoting WinRM:
+
+```powershell
+Enable-PSRemoting -Force
+Set-Service WinRM -StartupType Automatic
+Start-Service WinRM
+```
+
+2. Permitir conectividad remota por firewall (WinRM 5985/5986) y, si se usa descubrimiento por ping, ICMPv4 echo.
+3. Conceder permisos administrativos remotos a la cuenta usada desde el panel.
+4. Para encendido remoto, activar Wake-on-LAN en BIOS/NIC.
+
+## Solución a error `ServerNotTrusted` / `TrustedHosts`
+
+Si aparece un error indicando que el cliente WinRM no confía en el destino (equipos fuera de dominio Kerberos):
+
+- Desde la propia app, usar el bloque lateral **Conectividad WinRM** y añadir la IP/DNS en TrustedHosts.
+- O por PowerShell en el PC del profesor:
+
+```powershell
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "192.168.50.3" -Force
+```
+
+Para múltiples equipos:
+
+```powershell
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "192.168.50.*" -Force
+```
+
 ## Seguridad y operación en dominio / sin dominio
 
 - **Con dominio**: utilizar una cuenta de dominio con permisos de administración local en los equipos.
@@ -68,4 +101,3 @@ streamlit run ui_panel.py
 - El encendido depende de hardware/red (WOL activado en BIOS/NIC).
 - El filtrado por dominio puede requerir Windows actualizado para soporte `RemoteFqdn`.
 - No incluye aún inventario persistente en base de datos ni autenticación de usuarios del panel.
-
