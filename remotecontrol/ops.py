@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 import subprocess
 from dataclasses import dataclass
+from urllib import error, request
 from xml.etree import ElementTree
 
 from .policy import InternetPolicy
@@ -15,6 +17,14 @@ class Credentials:
     password: str
 
 
+@dataclass(slots=True)
+class AgentConfig:
+    enabled: bool = False
+    port: int = 8765
+    token: str = ""
+    timeout_s: int = 5
+
+
 class ClassroomController:
     def __init__(
         self,
@@ -22,11 +32,13 @@ class ClassroomController:
         auto_trust_hosts: bool = False,
         use_ssl: bool = False,
         authentication: str = "Default",
+        agent: AgentConfig | None = None,
     ):
         self.credentials = credentials
         self.auto_trust_hosts = auto_trust_hosts
         self.use_ssl = use_ssl
         self.authentication = authentication
+        self.agent = agent or AgentConfig()
 
     def _pwsh_encoded(self, script: str) -> str:
         data = script.encode("utf-16le")
@@ -59,6 +71,35 @@ class ClassroomController:
 
         return self._run_local_powershell(invoke)
 
+    def _invoke_agent(self, target_ip: str, action: str, policy: InternetPolicy | None = None) -> subprocess.CompletedProcess:
+        if not self.agent.enabled:
+            return subprocess.CompletedProcess(args=["agent"], returncode=1, stdout="", stderr="Agent deshabilitado")
+
+        url = f"http://{target_ip}:{self.agent.port}/execute"
+        body: dict[str, object] = {"token": self.agent.token, "action": action}
+        if policy is not None:
+            body["policy"] = {
+                "mode": policy.mode,
+                "allowed_domains": policy.allowed_domains,
+                "allowed_ips": policy.allowed_ips,
+                "allowed_dns_servers": policy.allowed_dns_servers,
+            }
+
+        data = json.dumps(body).encode("utf-8")
+        req = request.Request(url=url, data=data, method="POST", headers={"Content-Type": "application/json"})
+
+        try:
+            with request.urlopen(req, timeout=self.agent.timeout_s) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+            if payload.get("ok"):
+                return subprocess.CompletedProcess(args=["agent"], returncode=0, stdout=str(payload.get("message", "ok")), stderr="")
+            return subprocess.CompletedProcess(args=["agent"], returncode=1, stdout="", stderr=str(payload.get("error", "Fallo agente")))
+        except error.HTTPError as exc:
+            msg = exc.read().decode("utf-8", errors="replace")
+            return subprocess.CompletedProcess(args=["agent"], returncode=1, stdout="", stderr=f"HTTP {exc.code}: {msg}")
+        except Exception as exc:  # noqa: BLE001
+            return subprocess.CompletedProcess(args=["agent"], returncode=1, stdout="", stderr=f"No se pudo conectar al agente: {exc}")
+
     def add_trusted_host(self, host_or_ip: str) -> subprocess.CompletedProcess:
         script = (
             "$existing=(Get-Item WSMan:\\localhost\\Client\\TrustedHosts).Value;"
@@ -74,12 +115,24 @@ class ClassroomController:
         return self._run_local_powershell(script)
 
     def shutdown(self, target_ip: str) -> subprocess.CompletedProcess:
+        if self.agent.enabled:
+            via_agent = self._invoke_agent(target_ip, "shutdown")
+            if via_agent.returncode == 0:
+                return via_agent
         return self._invoke_remote_script(target_ip, "Stop-Computer -Force")
 
     def restart(self, target_ip: str) -> subprocess.CompletedProcess:
+        if self.agent.enabled:
+            via_agent = self._invoke_agent(target_ip, "restart")
+            if via_agent.returncode == 0:
+                return via_agent
         return self._invoke_remote_script(target_ip, "Restart-Computer -Force")
 
     def apply_internet_policy(self, target_ip: str, policy: InternetPolicy) -> subprocess.CompletedProcess:
+        if self.agent.enabled:
+            via_agent = self._invoke_agent(target_ip, "policy", policy=policy)
+            if via_agent.returncode == 0:
+                return via_agent
         return self._invoke_remote_script(target_ip, policy.to_powershell())
 
     @staticmethod
@@ -89,6 +142,11 @@ class ClassroomController:
             return "Error remoto desconocido"
 
         cleaned = ClassroomController._extract_clixml(raw)
+        if "AccessDenied" in raw or "Acceso denegado" in cleaned:
+            return (
+                "Acceso denegado en remoto. Usa credenciales con permisos de administrador local, "
+                "o despliega el modo Agente en los equipos de alumnos para control sin WinRM."
+            )
         if "ServerNotTrusted" in raw or "TrustedHosts" in cleaned or "ServerNotTrusted" in cleaned:
             return (
                 "WinRM no confía en el equipo remoto. "

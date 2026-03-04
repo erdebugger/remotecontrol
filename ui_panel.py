@@ -4,7 +4,7 @@ import streamlit as st
 
 from remotecontrol.discovery import discover_hosts
 from remotecontrol.models import Host
-from remotecontrol.ops import ClassroomController, Credentials
+from remotecontrol.ops import AgentConfig, ClassroomController, Credentials
 from remotecontrol.policy import InternetPolicy
 
 
@@ -23,6 +23,11 @@ with st.sidebar:
     auto_trust = st.checkbox("Auto-agregar IPs a TrustedHosts", value=True)
     use_ssl = st.checkbox("Usar HTTPS (WinRM 5986)", value=False)
     auth = st.selectbox("Autenticación", ["Default", "Negotiate", "Kerberos", "Basic"], index=1)
+    st.divider()
+    st.subheader("Modo Agente (sin WinRM)")
+    use_agent = st.checkbox("Usar agente en equipos alumno", value=False)
+    agent_port = st.number_input("Puerto agente", min_value=1, max_value=65535, value=8765, step=1)
+    agent_token = st.text_input("Token agente", type="password", value="")
 
 if st.button("Detectar equipos"):
     with st.spinner("Escaneando red..."):
@@ -53,6 +58,7 @@ controller = ClassroomController(
     auto_trust_hosts=auto_trust,
     use_ssl=use_ssl,
     authentication=auth,
+    agent=AgentConfig(enabled=use_agent, port=int(agent_port), token=agent_token),
 )
 
 with st.sidebar:

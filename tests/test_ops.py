@@ -1,6 +1,6 @@
 import unittest
 
-from remotecontrol.ops import ClassroomController, Credentials
+from remotecontrol.ops import AgentConfig, ClassroomController, Credentials
 
 
 class SpyController(ClassroomController):
@@ -10,6 +10,33 @@ class SpyController(ClassroomController):
 
     def _run_local_powershell(self, script: str):
         self.scripts.append(script)
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+
+class AgentSpyController(ClassroomController):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.agent_calls: list[str] = []
+        self.winrm_calls: list[str] = []
+
+    def _invoke_agent(self, target_ip: str, action: str, policy=None):
+        self.agent_calls.append(action)
+
+        class Result:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return Result()
+
+    def _invoke_remote_script(self, target_ip: str, script: str):
+        self.winrm_calls.append(script)
 
         class Result:
             returncode = 0
@@ -31,10 +58,11 @@ class OpsFormattingTests(unittest.TestCase):
         msg = ClassroomController.format_error(stderr)
         self.assertIn("WinRM no confía", msg)
 
-    def test_formats_plain_text_error(self):
-        stderr = "fallo de autenticación"
+    def test_access_denied_has_agent_recommendation(self):
+        stderr = "AccessDenied"
         msg = ClassroomController.format_error(stderr)
-        self.assertEqual("fallo de autenticación", msg)
+        self.assertIn("Acceso denegado", msg)
+        self.assertIn("modo Agente", msg)
 
 
 class OpsInvocationTests(unittest.TestCase):
@@ -58,6 +86,12 @@ class OpsInvocationTests(unittest.TestCase):
         controller = SpyController(use_ssl=True, authentication="Default")
         controller.restart("192.168.50.4")
         self.assertIn("-UseSSL", controller.scripts[-1])
+
+    def test_agent_mode_prioritizes_agent_over_winrm(self):
+        controller = AgentSpyController(agent=AgentConfig(enabled=True, token="t"))
+        controller.shutdown("192.168.50.9")
+        self.assertEqual(["shutdown"], controller.agent_calls)
+        self.assertEqual([], controller.winrm_calls)
 
 
 if __name__ == "__main__":

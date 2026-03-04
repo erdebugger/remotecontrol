@@ -2,7 +2,7 @@
 
 from .discovery import discover_hosts
 from .models import Host
-from .ops import ClassroomController
+from .ops import AgentConfig, ClassroomController, Credentials
 from .policy import InternetPolicy
 
-__all__ = ["discover_hosts", "Host", "ClassroomController", "InternetPolicy"]
+__all__ = ["discover_hosts", "Host", "ClassroomController", "Credentials", "AgentConfig", "InternetPolicy"]

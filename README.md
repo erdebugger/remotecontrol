@@ -25,6 +25,7 @@ Este proyecto implementa un **MVP funcional** con:
 - `remotecontrol/ops.py`: creación y ejecución de comandos remotos + utilidades TrustedHosts/errores.
 - `remotecontrol/policy.py`: generación de política de Internet (total/parcial).
 - `remotecontrol/wol.py`: envío de paquetes Wake-on-LAN.
+- `remotecontrol/agent.py`: agente opcional en clientes para control local por token.
 - `ui_panel.py`: panel Streamlit para el profesor.
 
 ## Requisitos
@@ -64,6 +65,31 @@ Start-Service WinRM
 3. Conceder permisos administrativos remotos a la cuenta usada desde el panel.
 4. Para encendido remoto, activar Wake-on-LAN en BIOS/NIC.
 
+
+
+## Modo alternativo recomendado: Agente en los equipos de alumnos
+
+Si WinRM sigue fallando con **Acceso denegado** o por políticas del centro, puedes usar un agente local en cada equipo alumno.
+
+- El profesor envía órdenes HTTP autenticadas por token al puerto del agente (por defecto `8765`).
+- El agente ejecuta localmente `Stop-Computer`, `Restart-Computer` o políticas de firewall.
+- Esto evita depender de `Invoke-Command`/WinRM para esas acciones.
+
+### Arranque del agente en cliente
+
+```powershell
+python -m remotecontrol.agent
+```
+
+Para producción, configúralo como servicio de Windows (NSSM/SC) y restringe acceso por firewall al PC del profesor.
+
+### Configuración en el panel
+
+En la barra lateral:
+
+1. Activa **Usar agente en equipos alumno**.
+2. Indica **Puerto agente** (8765 por defecto).
+3. Introduce el **Token agente** configurado en los clientes.
 
 ## Recomendación para el error al apagar (`ServerNotTrusted`)
 
