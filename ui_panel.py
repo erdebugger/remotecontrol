@@ -18,6 +18,11 @@ with st.sidebar:
     use_creds = st.checkbox("Usar credenciales explícitas", value=False)
     username = st.text_input("Usuario", value="") if use_creds else ""
     password = st.text_input("Contraseña", type="password", value="") if use_creds else ""
+    st.divider()
+    st.subheader("Opciones WinRM")
+    auto_trust = st.checkbox("Auto-agregar IPs a TrustedHosts", value=True)
+    use_ssl = st.checkbox("Usar HTTPS (WinRM 5986)", value=False)
+    auth = st.selectbox("Autenticación", ["Default", "Negotiate", "Kerberos", "Basic"], index=1)
 
 if st.button("Detectar equipos"):
     with st.spinner("Escaneando red..."):
@@ -43,7 +48,12 @@ for idx, host in enumerate(hosts):
         st.caption(host.ip)
 
 creds = Credentials(username=username, password=password) if use_creds and username and password else None
-controller = ClassroomController(credentials=creds)
+controller = ClassroomController(
+    credentials=creds,
+    auto_trust_hosts=auto_trust,
+    use_ssl=use_ssl,
+    authentication=auth,
+)
 
 with st.sidebar:
     st.divider()
@@ -55,7 +65,10 @@ with st.sidebar:
             if trusted_result.returncode == 0:
                 st.success(f"TrustedHosts actualizado con: {trusted_target.strip()}")
             else:
-                st.error(f"No se pudo actualizar TrustedHosts: {controller.format_error(trusted_result.stderr, trusted_result.stdout)}")
+                st.error(
+                    "No se pudo actualizar TrustedHosts: "
+                    f"{controller.format_error(trusted_result.stderr, trusted_result.stdout)}"
+                )
         else:
             st.warning("Indica una IP o nombre DNS para TrustedHosts")
 

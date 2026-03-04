@@ -64,6 +64,17 @@ Start-Service WinRM
 3. Conceder permisos administrativos remotos a la cuenta usada desde el panel.
 4. Para encendido remoto, activar Wake-on-LAN en BIOS/NIC.
 
+
+## Recomendación para el error al apagar (`ServerNotTrusted`)
+
+Si al pulsar **Apagar seleccionados** aparece `WinRM no confía en el equipo remoto`:
+
+1. En el panel, activa en la barra lateral:
+   - **Auto-agregar IPs a TrustedHosts**
+   - **Autenticación = Negotiate**
+2. Si tu entorno tiene WinRM HTTPS configurado, activa **Usar HTTPS (WinRM 5986)**.
+3. Usa credenciales administrativas válidas del equipo destino (dominio o local).
+
 ## Solución a error `ServerNotTrusted` / `TrustedHosts`
 
 Si aparece un error indicando que el cliente WinRM no confía en el destino (equipos fuera de dominio Kerberos):

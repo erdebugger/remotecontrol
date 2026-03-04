@@ -16,8 +16,17 @@ class Credentials:
 
 
 class ClassroomController:
-    def __init__(self, credentials: Credentials | None = None):
+    def __init__(
+        self,
+        credentials: Credentials | None = None,
+        auto_trust_hosts: bool = False,
+        use_ssl: bool = False,
+        authentication: str = "Default",
+    ):
         self.credentials = credentials
+        self.auto_trust_hosts = auto_trust_hosts
+        self.use_ssl = use_ssl
+        self.authentication = authentication
 
     def _pwsh_encoded(self, script: str) -> str:
         data = script.encode("utf-16le")
@@ -29,15 +38,24 @@ class ClassroomController:
         return subprocess.run(cmd, capture_output=True, text=True)
 
     def _invoke_remote_script(self, target_ip: str, script: str) -> subprocess.CompletedProcess:
+        if self.auto_trust_hosts and not self.use_ssl:
+            self.add_trusted_host(target_ip)
+
         auth_block = ""
+        cred_part = ""
         if self.credentials:
             auth_block = (
                 "$sec = ConvertTo-SecureString '{pwd}' -AsPlainText -Force;"
                 "$cred = New-Object System.Management.Automation.PSCredential('{usr}',$sec);"
             ).format(usr=self.credentials.username, pwd=self.credentials.password)
-            invoke = f"{auth_block} Invoke-Command -ComputerName {target_ip} -Credential $cred -ScriptBlock {{{script}}}"
-        else:
-            invoke = f"Invoke-Command -ComputerName {target_ip} -ScriptBlock {{{script}}}"
+            cred_part = " -Credential $cred"
+
+        ssl_part = " -UseSSL" if self.use_ssl else ""
+        auth_part = f" -Authentication {self.authentication}" if self.authentication else ""
+        invoke = (
+            f"{auth_block} Invoke-Command -ComputerName {target_ip}{cred_part}{ssl_part}{auth_part} "
+            f"-ScriptBlock {{{script}}}"
+        )
 
         return self._run_local_powershell(invoke)
 
@@ -74,7 +92,8 @@ class ClassroomController:
         if "ServerNotTrusted" in raw or "TrustedHosts" in cleaned or "ServerNotTrusted" in cleaned:
             return (
                 "WinRM no confía en el equipo remoto. "
-                "Agrega la IP/host a TrustedHosts en el PC del profesor "
+                "Activa 'Auto-agregar IPs a TrustedHosts' en la barra lateral, "
+                "o agrega manualmente la IP/host en el PC del profesor, "
                 "o usa WinRM por HTTPS (5986)."
             )
         return cleaned
